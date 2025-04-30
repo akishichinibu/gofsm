@@ -28,6 +28,7 @@ type Sub struct{}
 var _ Operation = &Sub{}
 
 func (s *Sub) MyOperation() {}
+
 func TestEFSMWithParams(t *testing.T) {
 	machine, err := gofsm.NewEFSMWithContext(func(b gofsm.EFSMWithContextBuilder[Context, int, Operation]) {
 

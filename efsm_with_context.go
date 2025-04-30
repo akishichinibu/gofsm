@@ -2,7 +2,75 @@ package gofsm
 
 import (
 	"fmt"
+	"sync"
 )
+
+type Transition[C any, S comparable, O comparable] func(context C, from S, by O) (to S, err error)
+
+// MARK: EFSMWithContext
+type EFSMWithContext[C any, S comparable, O comparable] interface {
+	Transit(context C, from S, by O) (to S, err error)
+}
+
+type efsmWithContext[C any, S comparable, O comparable] struct {
+	mutex sync.RWMutex
+	table []rule[C, S, O]
+}
+
+func (e *efsmWithContext[C, S, O]) Transit(context C, from S, by O) (to S, err error) {
+	e.mutex.RLock()
+	defer e.mutex.RUnlock()
+
+	matched := false
+
+	for _, r := range e.table {
+		if equalState(r.from, from) {
+			if equalOp(r.by, by) {
+				matched = true
+				if r.guard(context, from, by) {
+					return r.t(context, from, by)
+				}
+			}
+		}
+	}
+
+	er := &IllegalTransitError[C, S, O]{
+		m:    e,
+		From: from,
+		By:   by,
+	}
+
+	if matched {
+		er.Reason = "guard failed"
+	} else {
+		er.Reason = "no matching rule"
+	}
+
+	return from, er
+}
+
+func (e *efsmWithContext[C, S, O]) addRule(from S, by O, guard Guard[C, S, O], t Transition[C, S, O]) {
+	e.mutex.Lock()
+	defer e.mutex.Unlock()
+
+	for _, r := range e.table {
+		if equalState(r.from, from) && equalOp(r.by, by) {
+			panic(&illegalTransitDefinitionError[C, S, O]{
+				Reason: fmt.Sprintf("Duplicated rule from %v by %v", from, by),
+			})
+		}
+	}
+
+	rule := newRule(from, by, guard, t)
+	e.table = append(e.table, rule)
+}
+
+func newESFMWithContext[C any, S comparable, O comparable]() *efsmWithContext[C, S, O] {
+	return &efsmWithContext[C, S, O]{
+		mutex: sync.RWMutex{},
+		table: make([]rule[C, S, O], 0),
+	}
+}
 
 func NewEFSMWithContext[C any, S comparable, O comparable](builderFunc func(b EFSMWithContextBuilder[C, S, O])) (m EFSMWithContext[C, S, O], err error) {
 	defer func() {
@@ -17,7 +85,7 @@ func NewEFSMWithContext[C any, S comparable, O comparable](builderFunc func(b EF
 		}
 	}()
 	b := &efsmWithContextBuilder[C, S, O]{
-		m: newEFSM[C, S, O](),
+		m: newESFMWithContext[C, S, O](),
 	}
 	builderFunc(b)
 	return b.m, nil
@@ -112,19 +180,7 @@ type efsmWithContextGuardBuilder[C any, S comparable, O comparable] struct {
 }
 
 func (eb *efsmWithContextGuardBuilder[C, S, O]) To(f Transition[C, S, O]) {
-	eb.m.mutex.Lock()
-	defer eb.m.mutex.Unlock()
-
-	for _, r := range eb.m.table {
-		if equalState(r.from, eb.from) && equalOp(r.by, eb.on) {
-			panic(&illegalTransitDefinitionError[C, S, O]{
-				Reason: fmt.Sprintf("Duplicated rule from %v by %v", eb.from, eb.on),
-			})
-		}
-	}
-
-	rule := newRule(eb.from, eb.on, eb.guard, f)
-	eb.m.table = append(eb.m.table, rule)
+	eb.m.addRule(eb.from, eb.on, eb.guard, f)
 }
 
 func (eb *efsmWithContextGuardBuilder[C, S, O]) ToConst(v S) {
