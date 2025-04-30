@@ -1,8 +1,9 @@
-package gofsm
+package gofsm_test
 
 import (
 	"testing"
 
+	"github.com/akishichinibu/gofsm"
 	"github.com/stretchr/testify/require"
 )
 
@@ -25,8 +26,8 @@ const (
 type OrderContext struct{}
 
 func TestOrderStateMachine(t *testing.T) {
-	sm, err := NewEFSM(
-		func(b EFSMBuilder[OrderContext, OrderState, OrderEvent]) {
+	sm, err := gofsm.NewEFSMWithContext(
+		func(b gofsm.EFSMWithContextBuilder[OrderContext, OrderState, OrderEvent]) {
 			b.From(StatePending).On(EventPay).ToConst(StatePaid)
 			b.From(StatePending).On(EventCancel).ToConst(StateCancelled)
 			b.From(StatePaid).On(EventShip).ToConst(StateShipped)
@@ -59,7 +60,7 @@ func TestOrderStateMachine(t *testing.T) {
 }
 
 func TestIllegalTransition(t *testing.T) {
-	sm, err := NewEFSM(func(b EFSMBuilder[OrderContext, OrderState, OrderEvent]) {
+	sm, err := gofsm.NewEFSMWithContext(func(b gofsm.EFSMWithContextBuilder[OrderContext, OrderState, OrderEvent]) {
 		b.From(StatePending).On(EventPay).ToConst(StatePaid)
 	})
 	require.NoError(t, err)
@@ -68,13 +69,13 @@ func TestIllegalTransition(t *testing.T) {
 	_, err = sm.Transit(ctx, StatePending, EventShip)
 	require.Error(t, err)
 
-	if _, ok := err.(*IllegalTransitError[OrderContext, OrderState, OrderEvent]); !ok {
+	if _, ok := err.(*gofsm.IllegalTransitError[OrderContext, OrderState, OrderEvent]); !ok {
 		require.Fail(t, "expected IllegalTransitError, got %T", err)
 	}
 }
 
 func TestDuplicateDefinitionPanic(t *testing.T) {
-	_, err := NewEFSM(func(b EFSMBuilder[OrderContext, OrderState, OrderEvent]) {
+	_, err := gofsm.NewEFSMWithContext(func(b gofsm.EFSMWithContextBuilder[OrderContext, OrderState, OrderEvent]) {
 		b.From(StatePending).On(EventPay).ToConst(StatePaid)
 		b.From(StatePending).On(EventPay).ToConst(StatePaid)
 	})
@@ -82,7 +83,7 @@ func TestDuplicateDefinitionPanic(t *testing.T) {
 }
 
 func TestConcurrentTransit(t *testing.T) {
-	sm, err := NewEFSM(func(b EFSMBuilder[OrderContext, OrderState, OrderEvent]) {
+	sm, err := gofsm.NewEFSMWithContext(func(b gofsm.EFSMWithContextBuilder[OrderContext, OrderState, OrderEvent]) {
 		b.From(StatePending).On(EventPay).ToConst(StatePaid)
 	})
 	require.NoError(t, err)

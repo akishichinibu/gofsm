@@ -2,7 +2,7 @@ package gofsm
 
 import "fmt"
 
-type illegalTransitDefinitionError[C any, A comparable, B comparable] struct {
+type illegalTransitDefinitionError[C any, S comparable, O comparable] struct {
 	Reason string
 }
 
@@ -10,12 +10,13 @@ func (e *illegalTransitDefinitionError[C, A, B]) Error() string {
 	return fmt.Sprintf("Illegal transit definition: %s", e.Reason)
 }
 
-type IllegalTransitError[C any, A comparable, B comparable] struct {
-	m    EFSM[C, A, B]
-	From A
-	By   B
+type IllegalTransitError[C any, S comparable, O comparable] struct {
+	m      EFSMWithContext[C, S, O]
+	From   S
+	By     O
+	Reason string
 }
 
 func (e *IllegalTransitError[C, A, B]) Error() string {
-	return fmt.Sprintf("illeagal transit in %T, from %T(%v) by %T(%v)", e.m, e.From, e.From, e.By, e.By)
+	return fmt.Sprintf("illeagal transit in %T, from %T(%v) by %T(%v): %s", e.m, e.From, e.From, e.By, e.By, e.Reason)
 }
