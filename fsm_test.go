@@ -8,7 +8,9 @@ import (
 )
 
 func TestSimpleFSM(t *testing.T) {
+
 	type State string
+
 	type Event string
 
 	const (

@@ -12,14 +12,31 @@ func (f *fsm[S, O]) Transit(from S, by O) (to S, err error) {
 	return f.m.Transit(nil, from, by)
 }
 
+// NewFSM creates a new finite state machine (FSM) with the specified state and output types.
+// It takes a builder function as an argument, which is used to configure the FSM during its creation.
+//
+// The builder function receives an FSMBuilder instance, allowing the caller to define states,
+// transitions, and other FSM configurations. Once the builder function completes, the FSM is
+// returned, ready for use.
+//
+// Type Parameters:
+//   - S: The type representing the states of the FSM. Must be comparable.
+//   - O: The type representing the outputs of the FSM. Must be comparable.
+//
+// Parameters:
+//   - builderFunc: A function that accepts an FSMBuilder and configures the FSM.
+//
+// Returns:
+//   - FSM[S, O]: The constructed finite state machine.
+//   - error: An error if the FSM could not be created (always nil in the current implementation).
 func NewFSM[S comparable, O comparable](builderFunc func(b FSMBuilder[S, O])) (FSM[S, O], error) {
-	b := &fsmBuilder[S, O]{
+	builder := &fsmBuilder[S, O]{
 		m: &fsm[S, O]{
 			m: newESFMWithContext[any, S, O](),
 		},
 	}
-	builderFunc(b)
-	return b.m, nil
+	builderFunc(builder)
+	return builder.m, nil
 }
 
 // MARK: Builder
@@ -73,7 +90,7 @@ type fsmOnBuilder[S comparable, O comparable] struct {
 }
 
 func (f *fsmOnBuilder[S, O]) To(to S) {
-	f.m.m.addRule(f.from, f.on, nil, func(context any, from S, by O) (S, error) {
+	f.m.m.addRule(f.from, f.on, nil, func(any, S, O) (S, error) {
 		return to, nil
 	})
 }

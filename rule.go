@@ -6,12 +6,13 @@ import (
 )
 
 type rule[C any, S comparable, O comparable] struct {
-	from  S
-	by    O
-	guard Guard[C, S, O]
-	t     Transition[C, S, O]
+	from      S
+	operation O
+	guard     Guard[C, S, O]
+	t         Transition[C, S, O]
 }
 
+//nolint:cyclop
 func isPrimitiveKind(v reflect.Value) bool {
 	k := v.Kind()
 	return false ||
@@ -30,25 +31,33 @@ func isValidState[S comparable](state S) bool {
 	return isPrimitiveKind(rv)
 }
 
-func newRule[C any, S comparable, O comparable](from S, by O, guard Guard[C, S, O], t Transition[C, S, O]) rule[C, S, O] {
+func newRule[C any, S comparable, O comparable](
+	from S,
+	operation O,
+	guard Guard[C, S, O],
+	transition Transition[C, S, O],
+) rule[C, S, O] {
 	if !isValidState(from) {
 		panic(&illegalTransitDefinitionError[C, S, O]{
 			Reason: fmt.Sprintf("Illegal state %T(%v)", from, from),
 		})
 	}
-	if t == nil {
+
+	if transition == nil {
 		panic(&illegalTransitDefinitionError[C, S, O]{
-			Reason: fmt.Sprintf("Illegal transition %T(%v)", t, t),
+			Reason: fmt.Sprintf("Illegal transition %T(%v)", transition, transition),
 		})
 	}
+
 	if guard == nil {
 		guard = trueGuard[C, S, O]
 	}
+
 	return rule[C, S, O]{
-		from:  from,
-		by:    by,
-		guard: guard,
-		t:     t,
+		from:      from,
+		operation: operation,
+		guard:     guard,
+		t:         transition,
 	}
 }
 

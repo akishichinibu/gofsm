@@ -1,0 +1,19 @@
+name: run golangci-lint
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+jobs:
+  golangci-lint:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - run: |
+          make init/golangci-lint
+          make lint

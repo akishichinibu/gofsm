@@ -1,6 +1,7 @@
 package gofsm_test
 
 import (
+	"errors"
 	"testing"
 
 	"github.com/akishichinibu/gofsm"
@@ -26,7 +27,7 @@ const (
 type OrderContext struct{}
 
 func TestOrderStateMachine(t *testing.T) {
-	sm, err := gofsm.NewEFSMWithContext(
+	efsm, err := gofsm.NewEFSMWithContext(
 		func(b gofsm.EFSMWithContextBuilder[OrderContext, OrderState, OrderEvent]) {
 			b.From(StatePending).On(EventPay).ToConst(StatePaid)
 			b.From(StatePending).On(EventCancel).ToConst(StateCancelled)
@@ -52,7 +53,7 @@ func TestOrderStateMachine(t *testing.T) {
 
 	current := StatePending
 	for i, s := range steps {
-		next, err := sm.Transit(ctx, current, s.by)
+		next, err := efsm.Transit(ctx, current, s.by)
 		require.NoError(t, err)
 		require.Equal(t, s.expected, next, "step %d: expected %v, got %v", i, s.expected, next)
 		current = next
@@ -60,16 +61,17 @@ func TestOrderStateMachine(t *testing.T) {
 }
 
 func TestIllegalTransition(t *testing.T) {
-	sm, err := gofsm.NewEFSMWithContext(func(b gofsm.EFSMWithContextBuilder[OrderContext, OrderState, OrderEvent]) {
+	efsm, err := gofsm.NewEFSMWithContext(func(b gofsm.EFSMWithContextBuilder[OrderContext, OrderState, OrderEvent]) {
 		b.From(StatePending).On(EventPay).ToConst(StatePaid)
 	})
 	require.NoError(t, err)
 
 	ctx := OrderContext{}
-	_, err = sm.Transit(ctx, StatePending, EventShip)
+	_, err = efsm.Transit(ctx, StatePending, EventShip)
 	require.Error(t, err)
 
-	if _, ok := err.(*gofsm.IllegalTransitError[OrderContext, OrderState, OrderEvent]); !ok {
+	var perr *gofsm.IllegalTransitError[OrderContext, OrderState, OrderEvent]
+	if ok := errors.As(err, &perr); !ok {
 		require.Fail(t, "expected IllegalTransitError, got %T", err)
 	}
 }
@@ -83,7 +85,7 @@ func TestDuplicateDefinitionPanic(t *testing.T) {
 }
 
 func TestConcurrentTransit(t *testing.T) {
-	sm, err := gofsm.NewEFSMWithContext(func(b gofsm.EFSMWithContextBuilder[OrderContext, OrderState, OrderEvent]) {
+	efsm, err := gofsm.NewEFSMWithContext(func(b gofsm.EFSMWithContextBuilder[OrderContext, OrderState, OrderEvent]) {
 		b.From(StatePending).On(EventPay).ToConst(StatePaid)
 	})
 	require.NoError(t, err)
@@ -91,16 +93,68 @@ func TestConcurrentTransit(t *testing.T) {
 	ctx := OrderContext{}
 	done := make(chan bool)
 
-	for i := 0; i < 100; i++ {
+	for range 100 {
 		go func() {
 			defer func() { done <- true }()
-			for j := 0; j < 1000; j++ {
-				_, _ = sm.Transit(ctx, StatePending, EventPay)
+			for range 1000 {
+				_, _ = efsm.Transit(ctx, StatePending, EventPay)
 			}
 		}()
 	}
 
-	for i := 0; i < 100; i++ {
+	for range 100 {
 		<-done
 	}
+}
+
+type Context struct {
+	Bais int
+}
+
+type Operation interface {
+	MyOperation()
+}
+
+type Add struct {
+	Diff int
+}
+
+var _ Operation = &Add{}
+
+func (a *Add) MyOperation() {}
+
+type Sub struct{}
+
+var _ Operation = &Sub{}
+
+func (s *Sub) MyOperation() {}
+
+func TestEFSMWithParams(t *testing.T) {
+	machine, err := gofsm.NewEFSMWithContext(func(builder gofsm.EFSMWithContextBuilder[Context, int, Operation]) {
+		builder.From(1).On(&Add{Diff: 10}).To(func(ctx Context, from int, op Operation) (int, error) {
+			add := op.(*Add)
+			return from + ctx.Bais + add.Diff, nil
+		})
+
+		builder.From(20).On(&Sub{}).To(func(ctx Context, from int, op Operation) (int, error) {
+			return from + ctx.Bais - 5, nil
+		})
+	})
+
+	require.NoError(t, err)
+
+	{
+		state, err := machine.Transit(Context{Bais: 5}, 1, &Add{Diff: 10})
+		require.NoError(t, err)
+		require.Equal(t, 16, state)
+	}
+
+	{
+		state, err := machine.Transit(Context{Bais: 3}, 20, &Sub{})
+		require.NoError(t, err)
+		require.Equal(t, 18, state)
+	}
+
+	_, err = machine.Transit(Context{Bais: 3}, 10, &Sub{})
+	require.Error(t, err)
 }

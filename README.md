@@ -1,4 +1,4 @@
-# gofsm (wip)
+# gofsm
 
 A lightweight, type-safe, concurrent-safe Extended Finite State Machine (EFSM) library for Go.
 Easily build flexible and scalable FSMs, with rich context-aware transitions and a fluent builder API.

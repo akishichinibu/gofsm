@@ -11,12 +11,12 @@ func (e *illegalTransitDefinitionError[C, A, B]) Error() string {
 }
 
 type IllegalTransitError[C any, S comparable, O comparable] struct {
-	m      EFSMWithContext[C, S, O]
-	From   S
-	By     O
-	Reason string
+	m         EFSMWithContext[C, S, O]
+	From      S
+	Operation O
+	Reason    string
 }
 
 func (e *IllegalTransitError[C, A, B]) Error() string {
-	return fmt.Sprintf("illeagal transit in %T, from %T(%v) by %T(%v): %s", e.m, e.From, e.From, e.By, e.By, e.Reason)
+	return fmt.Sprintf("illeagal transit in %T, from %T(%v) by %T(%v): %s", e.m, e.From, e.From, e.Operation, e.Operation, e.Reason)
 }
